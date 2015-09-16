@@ -2,45 +2,83 @@ package me.parkerwilliams.periscope;
 
 import android.app.Activity;
 import android.content.Context;
-import android.content.pm.PackageManager;
+import android.os.Process;
+import android.view.View;
 import android.view.ViewGroup;
 
 import com.mattprecious.telescope.Lens;
 import com.mattprecious.telescope.TelescopeLayout;
 
+import static android.Manifest.permission.VIBRATE;
+import static android.content.pm.PackageManager.PERMISSION_GRANTED;
+
 /**
- * This is a simple class that injects the {@link TelescopeLayout} into an activities root view. So it does not need
+ * This is a simple class that injects the {@link TelescopeLayout} into an Activity's root view. So it does not need
  * to be added to the layout.
  * <p/>
- * {@link #Periscope(Activity, Lens)} needs to be called after {@link Activity#setContentView(int)} is called. So the
- * activity has a view.
+ * To create the {@link Periscope} call the builder {@link me.parkerwilliams.periscope.Periscope.Builder} which
+ * provides all of the settings that the {@link TelescopeLayout} does
+ * <p/>
  * {@link #onDestroy()} needs to be called in the {@link Activity#onDestroy()}
  * <p/>
- * For {@link TelescopeLayout} the {@code android.permission.WRITE_EXTERNAL_STORAGE} is required. However the {@code
- * android.permission.VIBRATE} is opitional and will only be on if it is in the manifest.
+ * For {@link TelescopeLayout} the {@code android.permission.WRITE_EXTERNAL_STORAGE} is required on 4.4+. However the
+ * {@codeandroid.permission.VIBRATE} is optional and will only be on if it is in the manifest.
  * <p/>
  * Created by parker on 9/16/15.
  */
 public class Periscope {
 
-    private TelescopeLayout mTelescope;
-    private Lens mLens;
     private Context mContext;
+    private TelescopeLayout mTelescope;
+    private Activity mActivity;
+    private boolean vibrate;
+    private Lens mLen;
+    private boolean mScreenshot = true;
+    private boolean mScreenshotChildrenOnly;
+    private int mPointerCount;
+    private int mProgressColor;
+    private boolean mIsPointerCountSet;
+    private boolean mIsProgressColorSet;
 
-    /**
-     * Call after the {@link Activity#setContentView(int)} is called.
-     *
-     * @param activity
-     */
-    public Periscope(Activity activity, Lens lens) {
-        this.mLens = lens;
-        mContext = activity.getApplicationContext();
-        ViewGroup viewGroup = (ViewGroup) activity.getWindow().getDecorView().getRootView();
+    private Periscope(Builder builder, Activity activity) {
+        this.mActivity = activity;
+        this.vibrate = builder.vibrate;
+        this.mLen = builder.lens;
+        this.mScreenshot = builder.screenshot;
+        this.mScreenshotChildrenOnly = builder.screenshotChildrenOnly;
+        this.mPointerCount = builder.pointerCount;
+        this.mProgressColor = builder.progressColor;
+        this.mIsPointerCountSet = builder.isPointerCountSet;
+        this.mIsProgressColorSet = builder.isProgressColorSet;
+        init();
+    }
+
+    private void init() {
+        mContext = mActivity.getApplicationContext();
+        ViewGroup viewGroup = (ViewGroup) mActivity.getWindow().getDecorView().getRootView();
         mTelescope = new TelescopeLayout(mContext);
-        mTelescope.setVibrate(hasVibratePermission(mContext));
-        mTelescope.setLens(mLens);
+        // Setup the telescope view
+        mTelescope.setVibrate(vibrate && hasVibratePermission(mContext));
+        mTelescope.setLens(mLen);
+        mTelescope.setScreenshot(mScreenshot);
+        mTelescope.setScreenshotChildrenOnly(mScreenshotChildrenOnly);
+        if (mIsPointerCountSet) {
+            mTelescope.setPointerCount(mPointerCount);
+        }
+        if (mIsProgressColorSet) {
+            mTelescope.setProgressColor(mProgressColor);
+        }
+
         viewGroup.addView(mTelescope, 0, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
+    }
+
+    private void setScreenshotTarget(View view) {
+        mTelescope.setScreenshotTarget(view);
+    }
+
+    public static Builder newPeriscope() {
+        return new Builder();
     }
 
     /**
@@ -48,7 +86,10 @@ public class Periscope {
      */
     public void onDestroy() {
         TelescopeLayout.cleanUp(mContext);
+        // Make sure there are no leaks
         mContext = null;
+        mActivity = null;
+        mLen = null;
     }
 
     /**
@@ -59,7 +100,87 @@ public class Periscope {
      * @return
      */
     private boolean hasVibratePermission(Context context) {
-        String permission = "android.permission.VIBRATE";
-        return context.checkCallingPermission(permission) == PackageManager.PERMISSION_GRANTED;
+        return context.checkPermission(VIBRATE, android.os.Process.myPid(), Process.myUid()) == PERMISSION_GRANTED;
+    }
+
+
+    /**
+     * Lets the {@link TelescopeLayout} settings to be set. And creates the {@link Periscope}
+     */
+    public static final class Builder {
+        // Defaults from the TelescopeLayout Attributes
+        private boolean vibrate = true;
+        private boolean screenshot = true;
+        private boolean screenshotChildrenOnly = false;
+        private Lens lens;
+        private int pointerCount;
+        private int progressColor;
+        private boolean isPointerCountSet;
+        private boolean isProgressColorSet;
+
+        private Builder() {
+        }
+
+        /**
+         * By default this build method will create a {@link TelescopeLayout} for the whole Activity.
+         *
+         * @param activity
+         * @return
+         */
+        public Periscope build(Activity activity) {
+            return new Periscope(this, activity);
+        }
+
+        /**
+         * Use this build method to set the {@link TelescopeLayout#setScreenshotTarget(View)}
+         *
+         * @param activity
+         * @param screenshotTarget
+         * @return
+         */
+        public Periscope build(Activity activity, View screenshotTarget) {
+            Periscope periscope = new Periscope(this, activity);
+            periscope.setScreenshotTarget(screenshotTarget);
+            return periscope;
+        }
+
+        public Builder vibrate(boolean vibrate) {
+            this.vibrate = vibrate;
+            return this;
+        }
+
+        public Builder lens(Lens lens) {
+            this.lens = lens;
+            return this;
+        }
+
+        public Builder screenshot(boolean screenshot) {
+            this.screenshot = screenshot;
+            return this;
+        }
+
+        public Builder screenshotChildrenOnly(boolean screenshotChildrenOnly) {
+            this.screenshotChildrenOnly = screenshotChildrenOnly;
+            return this;
+        }
+
+
+        public Builder pointerCount(int pointerCount) {
+            this.pointerCount = pointerCount;
+            this.isPointerCountSet = true;
+            return this;
+        }
+
+        /**
+         * {@link TelescopeLayout#setProgressColor(int)}
+         *
+         * @param progressColor
+         * @return
+         */
+        public Builder progressColor(int progressColor) {
+            this.progressColor = progressColor;
+            this.isProgressColorSet = true;
+            return this;
+        }
     }
 }

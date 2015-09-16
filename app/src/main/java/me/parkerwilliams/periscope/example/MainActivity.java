@@ -8,16 +8,18 @@ import android.view.MenuItem;
 import com.mattprecious.telescope.EmailLens;
 
 import me.parkerwilliams.periscope.Periscope;
-import parkerwilliams.me.R;
 
 public class MainActivity extends AppCompatActivity {
+    private static final String TAG = "MainActivity";
 
     private Periscope mPeriscope;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        mPeriscope = new Periscope(this, new EmailLens(this, "Test Periscope", "ameriod@gmail.com"));
+        mPeriscope = Periscope.newPeriscope()
+                .lens(new EmailLens(this, "Test Periscope " + TAG, "testemail@gmail.com"))
+                .build(this);
         setContentView(R.layout.activity_main);
     }
 
